@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>El Gran Reto — Javier & Dani</title>
+<style>
+*{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:radial-gradient(circle at top,#2b1765,#090719 65%);color:white;min-height:100vh;overflow:hidden}
+button{font:inherit;cursor:pointer;border:0}.screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:28px}
+.card{width:min(1050px,94vw);background:rgba(20,15,45,.88);border:1px solid rgba(255,255,255,.15);border-radius:28px;padding:34px;box-shadow:0 20px 80px #0008;text-align:center}
+h1{font-size:clamp(38px,7vw,78px);margin:5px 0 8px;line-height:1}.sub{font-size:20px;opacity:.8}.btn{padding:16px 26px;border-radius:16px;background:#fff;color:#171126;font-weight:800;margin:10px;transition:.15s}.btn:hover{transform:translateY(-3px);filter:brightness(1.08)}
+.start{margin-top:28px;font-size:22px;background:#ffd84d}.top{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:22px}.score{padding:12px 18px;border-radius:14px;background:#ffffff12;font-weight:800}.question{font-size:clamp(25px,4vw,46px);font-weight:850;margin:25px auto;max-width:850px}.answers{display:grid;grid-template-columns:1fr 1fr;gap:15px;max-width:800px;margin:auto}.answer{padding:20px;border-radius:17px;background:#ffffff12;color:white;border:1px solid #ffffff20;font-weight:750;font-size:19px}.answer:hover{background:#ffffff22;transform:scale(1.02)}.feedback{min-height:38px;font-size:22px;font-weight:850;margin:18px}.hidden{display:none}.correct{background:#1b9b62!important}.wrong{background:#bd3850!important}.bar{height:9px;background:#ffffff14;border-radius:20px;overflow:hidden;margin-top:18px}.fill{height:100%;background:#ffd84d;width:0;transition:.3s}.small{opacity:.65;font-size:14px;margin-top:15px}
+.auth-tabs{display:flex;gap:8px;justify-content:center;margin:22px 0 12px}
+.auth-tab{padding:10px 18px;border-radius:12px;background:#ffffff12;color:white;border:1px solid #ffffff18;font-weight:800}
+.auth-tab.active{background:#ffd84d;color:#171126}
+.auth-form{max-width:420px;margin:10px auto}
+.auth-form input{width:100%;padding:15px 16px;margin:7px 0;border-radius:13px;border:1px solid #ffffff22;background:#ffffff10;color:white;font:inherit;outline:none}
+.auth-form input::placeholder{color:#ffffff88}
+.auth-error{color:#ff8b9d;font-weight:700;min-height:24px;margin:8px}
+.user-pill{padding:10px 14px;border-radius:12px;background:#ffffff12;font-weight:800}
+.logout{background:#ffffff12;color:white;padding:10px 14px;border-radius:12px;font-weight:800}
+.guest-name{max-width:420px;margin:15px auto}
+</style>
+</head>
+<body>
+<div id="app" class="screen"></div>
+<script>
+const questions=[
+["¿Quién es más probable que llegue tarde?","Javier","Dani","Los dos","Ninguno"],
+["¿Quién se ríe primero cuando no debería?","Javier","Dani","Los dos","Ninguno"],
+["¿Quién sería capaz de sobrevivir más tiempo sin móvil?","Javier","Dani","Los dos","Ninguno"],
+["¿Quién tiene más posibilidades de decir «yo no he sido»?","Javier","Dani","Los dos","Ninguno"],
+["¿Quién aguanta menos tiempo sin comer?","Javier","Dani","Los dos","Ninguno"],
+["¿Quién es más probable que proponga un plan improvisado?","Javier","Dani","Los dos","Ninguno"],
+["¿Quién tiene más posibilidades de quedarse dormido viendo una película?","Javier","Dani","Los dos","Ninguno"],
+["¿Quién es más competitivo jugando?","Javier","Dani","Los dos","Ninguno"],
+["¿Quién tardaría más en elegir qué pedir para comer?","Javier","Dani","Los dos","Ninguno"],
+["¿Quién tiene más posibilidades de hacer una foto en un viaje?","Javier","Dani","Los dos","Ninguno"],
+["¿Quién conoce mejor al otro?","Javier","Dani","Los dos","Ninguno"],
+["¿Quién ganaría una discusión aunque no tuviera razón?","Javier","Dani","Los dos","Ninguno"]
+];
+
+let i=0, score=0, locked=false;
+const app=document.getElementById('app');
+let currentUser = null;
+
+function saveSession(token, username){
+ localStorage.setItem('granRetoToken', token);
+ localStorage.setItem('granRetoSession', username);
+}
+function clearSession(){ localStorage.removeItem('granRetoToken'); localStorage.removeItem('granRetoSession'); }
+function token(){ return localStorage.getItem('granRetoToken') || ''; }
+
+async function register(){
+ const username=document.getElementById('username').value.trim();
+ const password=document.getElementById('password').value;
+ const err=document.getElementById('authError'); err.textContent='';
+ try{
+  const r=await fetch('/api/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});
+  const data=await r.json(); if(!r.ok) throw new Error(data.error||'Error');
+  saveSession(data.token,data.user.username); currentUser=data.user.username; start();
+ }catch(e){err.textContent=e.message}
+}
+
+async function login(){
+ const username=document.getElementById('username').value.trim();
+ const password=document.getElementById('password').value;
+ const err=document.getElementById('authError'); err.textContent='';
+ try{
+  const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});
+  const data=await r.json(); if(!r.ok) throw new Error(data.error||'Error');
+  saveSession(data.token,data.user.username); currentUser=data.user.username; start();
+ }catch(e){err.textContent=e.message}
+}
+
+async function restoreSession(){
+ const t=token();
+ if(!t) return false;
+ try{
+  const r=await fetch('/api/me',{headers:{Authorization:'Bearer '+t}});
+  if(!r.ok) throw new Error();
+  const data=await r.json(); currentUser=data.user.username; return true;
+ }catch(e){clearSession(); currentUser=null; return false;}
+}
+
+function showGuest(){
+ app.innerHTML=`<div class="card">
+   <div style="font-size:55px">👤🎮</div>
+   <h1>JUGAR COMO INVITADO</h1>
+   <p class="sub">Escribe el nombre que aparecerá durante la partida.</p>
+   <div class="guest-name">
+     <input id="guestName" class="auth-form" style="width:100%;padding:15px 16px;margin:7px 0;border-radius:13px;border:1px solid #ffffff22;background:#ffffff10;color:white;font:inherit" maxlength="30" placeholder="Tu nombre">
+   </div>
+   <div id="guestError" class="auth-error"></div>
+   <button class="btn start" onclick="guestLogin()">▶ EMPEZAR COMO INVITADO</button>
+   <button class="btn" onclick="home()">← VOLVER</button>
+ </div>`;
+ document.getElementById('guestName').focus();
+}
+
+function guestLogin(){
+ const name=document.getElementById('guestName').value.trim();
+ if(!name){document.getElementById('guestError').textContent="Escribe un nombre para continuar.";return;}
+ currentUser=name;
+ start();
+}
+
+function home(){
+ app.innerHTML=`<div class="card">
+   <div style="font-size:55px">🎮</div>
+   <h1>EL GRAN RETO</h1>
+   <p class="sub">JAVIER & DANI</p>
+   <div class="auth-tabs">
+     <button id="loginTab" class="auth-tab active" onclick="showAuth('login')">INICIAR SESIÓN</button>
+     <button id="registerTab" class="auth-tab" onclick="showAuth('register')">CREAR CUENTA</button>
+   </div>
+   <div class="auth-form">
+     <input id="username" maxlength="30" autocomplete="username" placeholder="Nombre de usuario">
+     <input id="password" type="password" autocomplete="current-password" placeholder="Contraseña">
+     <div id="authError" class="auth-error"></div>
+     <button id="authSubmit" class="btn start" onclick="login()">▶ ENTRAR</button>
+   </div>
+   <button class="btn" onclick="showGuest()">👤 JUGAR COMO INVITADO</button>
+   <p class="small">Tus cuentas se guardan online cuando el juego está publicado con su servidor.</p>
+ </div>`;
+}
+
+function showAuth(mode){
+ const loginMode=mode==='login';
+ document.getElementById('loginTab').classList.toggle('active',loginMode);
+ document.getElementById('registerTab').classList.toggle('active',!loginMode);
+ document.getElementById('password').setAttribute('autocomplete',loginMode?'current-password':'new-password');
+ document.getElementById('authSubmit').textContent=loginMode?'▶ ENTRAR':'✓ CREAR CUENTA';
+ document.getElementById('authSubmit').onclick=loginMode?login:register;
+ document.getElementById('authError').textContent='';
+}
+
+function start(){i=0;score=0;showQ()}
+
+function showQ(){
+ locked=false;
+ const q=questions[i];
+ app.innerHTML=`<div class="card">
+ <div class="top"><div class="user-pill">👤 ${currentUser || "Invitado"}</div><div class="score">🏆 ${score} puntos</div><div>Pregunta ${i+1}/${questions.length}</div></div>
+ <div class="question">${q[0]}</div>
+ <div class="answers">${q.slice(1).map((a,n)=>`<button class="answer" onclick="answer(this,'${a.replaceAll("'","\\'")}')">${["🔵","🔴","🟣","🟡"][n]} ${a}</button>`).join("")}</div>
+ <div id="feedback" class="feedback"></div>
+ <div class="bar"><div class="fill" style="width:${i/questions.length*100}%"></div></div>
+ <div class="small">Pulsa una respuesta. Después podrás pasar a la siguiente pregunta.</div>
+ </div>`;
+}
+function answer(btn,a){
+ if(locked)return; locked=true;
+ // Respuesta deliberadamente editable: en esta versión se considera válida cualquier elección,
+ // para que el anfitrión pueda decidir en directo quién acertó.
+ document.querySelectorAll('.answer').forEach(b=>b.disabled=true);
+ btn.classList.add('correct');
+ score+=100;
+ document.getElementById('feedback').textContent="🎉 ¡PUNTO! +100";
+ setTimeout(next,900);
+}
+function next(){i++; if(i>=questions.length)finish(); else showQ()}
+async function finish(){
+ app.innerHTML=`<div class="card">
+ <div style="font-size:70px">🏆</div><h1>¡PARTIDA TERMINADA!</h1>
+ <p style="font-size:25px;margin:10px">Tu puntuación</p><p class="sub">Jugador: <strong>${currentUser || "Invitado"}</strong></p>
+ <div style="font-size:72px;font-weight:900;color:#ffd84d">${score}</div>
+ <div id="ranking" style="margin:24px auto;max-width:650px">Cargando clasificación...</div>
+ <p class="sub">🎂 ¡FELIZ CUMPLEAÑOS, JAVIER Y DANI! 🎂</p>
+ <button class="btn start" onclick="home()">↻ JUGAR OTRA VEZ</button><button class="btn" onclick="logout()">🚪 CERRAR SESIÓN</button>
+ </div>`;
+ if(token()){
+   try{
+     const r=await fetch('/api/scores',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token()},body:JSON.stringify({score})});
+     const data=await r.json();
+     if(r.ok) renderRanking(data.leaderboard); else throw new Error();
+   }catch(e){ document.getElementById('ranking').innerHTML='<p class="small">No se pudo guardar la puntuación.</p>'; }
+ } else {
+   try{ const r=await fetch('/api/leaderboard'); const data=await r.json(); renderRanking(data.leaderboard); }
+   catch(e){ document.getElementById('ranking').innerHTML=''; }
+ }
+}
+function renderRanking(rows){
+ const box=document.getElementById('ranking');
+ if(!rows || !rows.length){ box.innerHTML='<p class="small">Todavía no hay puntuaciones.</p>'; return; }
+ box.innerHTML='<h2 style="margin-bottom:12px">🏅 CLASIFICACIÓN</h2>'+rows.map((r,n)=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:11px 15px;margin:7px 0;border-radius:12px;background:#ffffff12;font-weight:800"><span>${n===0?'🥇':n===1?'🥈':n===2?'🥉':(n+1)+'.'} ${r.username}</span><span>${r.score} puntos</span></div>`).join('');
+}
+function logout(){currentUser=null;clearSession();home();}
+restoreSession().then(ok => { if(ok){ start(); } else { home(); } });
+</script>
+</body>
+</html>
